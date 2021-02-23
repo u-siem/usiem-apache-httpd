@@ -236,6 +236,9 @@ mod filterlog_tests {
                 assert_eq!(log.service(), "Web Server");
                 assert_eq!(log.field(field_dictionary::HTTP_REQUEST_METHOD), Some(&SiemField::from_str("GET")));
                 assert_eq!(log.field(field_dictionary::HTTP_RESPONSE_STATUS_CODE), Some(&SiemField::U32(304)));
+                assert_eq!(log.field(field_dictionary::SOURCE_BYTES), Some(&SiemField::U32(465)));
+                assert_eq!(log.field(field_dictionary::DESTINATION_BYTES), Some(&SiemField::U32(164)));
+                assert_eq!(log.field("user_agent.original"), Some(&SiemField::from_str("Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) Gecko/20100101 Firefox/85.0")));
             }
             Err(_) => assert_eq!(1, 0),
         }
