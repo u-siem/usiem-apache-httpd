@@ -3,3 +3,5 @@
 172.17.0.1 - - [21/Feb/2021:23:22:01 +0000] "GET /xss.html?default=%3Cscript%3Ealert(document.cookie)%3C/script%3E HTTP/1.1" 403 217 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) Gecko/20100101 Firefox/85.0" 444 418
 172.17.0.1 - - [21/Feb/2021:23:22:05 +0000] "GET /xss.html?default=%27OR%201=1-- HTTP/1.1" 403 217 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) Gecko/20100101 Firefox/85.0" 410 418
 172.17.0.1 - - [21/Feb/2021:23:22:10 +0000] "GET / HTTP/1.1" 304 - "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) Gecko/20100101 Firefox/85.0" 465 164
+172.17.0.1 - - [23/Feb/2021:20:39:35 +0000] "GET / HTTP/1.1" 200 163 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) Gecko/20100101 Firefox/85.0" 362 431
+172.17.0.1 - - [23/Feb/2021:20:39:35 +0000] "GET /favicon.ico HTTP/1.1" 404 209 "http://localhost:8080/" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) Gecko/20100101 Firefox/85.0" 317 409
