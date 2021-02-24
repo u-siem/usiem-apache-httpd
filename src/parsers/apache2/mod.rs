@@ -56,19 +56,20 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
         Some(v) => v,
         None => return Err(LogParsingError::NoValidParser(log)),
     };
+    // Compatibility with combined and combinedio format
     let in_bytes = match fields.get(5) {
         Some(v) => match v.parse::<u32>() {
             Ok(v) => v,
-            Err(_) => return Err(LogParsingError::NoValidParser(log)),
+            Err(_) => 0,
         },
-        None => return Err(LogParsingError::NoValidParser(log)),
+        None => 0,
     };
     let out_bytes = match fields.get(6) {
         Some(v) => match v.parse::<u32>() {
             Ok(v) => v,
-            Err(_) => return Err(LogParsingError::NoValidParser(log)),
+            Err(_) => 0,
         },
-        None => return Err(LogParsingError::NoValidParser(log)),
+        None => 0,
     };
 
     let (url_path, url_query, url_extension) = extract_url_parts(url);
@@ -169,7 +170,7 @@ pub fn extract_url_parts<'a>(url: &'a str) -> (&'a str, &'a str, &'a str) {
             if (path.len() - v) > 8 {
                 ""
             } else {
-                &path[v..]
+                &path[v+1..]
             }
         }
         None => "",
