@@ -14,13 +14,13 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
     };
     //let syslog_header = &log_line[0..start_log_pos];
     let log_header = &log_line[..start_log_pos];
-    let event_created = match log_header.find('[') {
+    let (pre_data, event_created) = match log_header.find('[') {
         Some(v1) => match log_header.find(']') {
             Some(v2) => {
                 if (v2 - v1) > 27 || (v2 - v1) < 24 {
                     return Err(LogParsingError::NoValidParser(log));
                 } else {
-                    &log_header[v1 + 1..v2]
+                    (&log_header[..v1-1],&log_header[v1 + 1..v2])
                 }
             }
             None => return Err(LogParsingError::NoValidParser(log)),
@@ -34,6 +34,7 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
 
     let log_content = &log_line[start_log_pos..];
     let fields = extract_fields(log_content);
+    let pre_fields = extract_fields(pre_data);
     let (http_method, url, version) = match fields.get(0) {
         Some(v) => match extract_http_content(v) {
             Ok((method, url, version)) => (method, url, version),
@@ -74,6 +75,35 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
 
     let (url_path, url_query, url_extension) = extract_url_parts(url);
 
+    let pre_size = pre_fields.len();
+
+    let user_name = match pre_fields.get(pre_size - 1) {
+        Some(v) => match *v {
+            "-" => Cow::Borrowed(""),
+            _ => Cow::Owned(v.to_string())
+        },
+        None => return Err(LogParsingError::NoValidParser(log)),
+    };
+
+    let (source_ip, source_host) = match pre_fields.get(pre_size - 3) {
+        Some(v) => match SiemIp::from_ip_str(v) {
+            Ok(ip) => (ip, (*v).to_string()),
+            Err(_) => (SiemIp::V4(0), (*v).to_string())
+        },
+        None => return Err(LogParsingError::NoValidParser(log)),
+    };
+    let (destination_ip, destination_host) = if pre_size >= 4 {
+        match pre_fields.get(pre_size - 4) {
+            Some(v) => match SiemIp::from_ip_str(v) {
+                Ok(ip) => (Some(ip), Some(v.to_string())),
+                Err(_) => (None, Some(v.to_string()))
+            },
+            None => (None,None)
+        }
+    }else{
+        (None,None)
+    };
+
     let mut log = SiemLog::new(
         log_line.to_string(),
         log.event_received(),
@@ -82,10 +112,15 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
     log.set_category(Cow::Borrowed("Web Server"));
     log.set_product(Cow::Borrowed("Apache"));
     log.set_service(Cow::Borrowed("Web Server"));
+    let outcome = if http_code < 400 {
+        WebServerOutcome::ALLOW
+    }else{
+        WebServerOutcome::BLOCK
+    };
     log.set_event(SiemEvent::WebServer(WebServerEvent {
-        source_ip: SiemIp::V4(0),
-        destination_ip: None,
-        destination_port: 0,
+        source_ip,
+        destination_ip,
+        destination_port: 80,
         in_bytes,
         out_bytes,
         http_code,
@@ -98,11 +133,20 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
         url_query: Cow::Owned(url_query.to_string()),
         url_extension: Cow::Owned(url_extension.to_string()),
         protocol: parse_http_protocol(version),
-        user_name: Cow::Borrowed(""),
+        user_name,
         mime_type: Cow::Borrowed(""),
-        outcome: WebServerOutcome::ALLOW,
+        outcome
     }));
     log.set_event_created(event_created);
+    log.add_field("source.host_name", SiemField::from_str(source_host));
+
+    match destination_host {
+        Some(v) => {
+            log.add_field("destination.host_name", SiemField::from_str(v));
+        },
+        None => {}
+    };
+    
     match *referer {
         "" => {}
         _ => {
@@ -240,6 +284,7 @@ mod filterlog_tests {
                 assert_eq!(log.field(field_dictionary::SOURCE_BYTES), Some(&SiemField::U32(465)));
                 assert_eq!(log.field(field_dictionary::DESTINATION_BYTES), Some(&SiemField::U32(164)));
                 assert_eq!(log.field("user_agent.original"), Some(&SiemField::from_str("Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) Gecko/20100101 Firefox/85.0")));
+                assert_eq!(log.field(field_dictionary::SOURCE_IP), Some(&SiemField::IP(SiemIp::from_ip_str("172.17.0.1").unwrap())));
             }
             Err(_) => assert_eq!(1, 0),
         }

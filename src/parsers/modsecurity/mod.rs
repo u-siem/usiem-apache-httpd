@@ -125,7 +125,7 @@ pub fn parse_log_json(mut log: SiemLog) -> Result<SiemLog, LogParsingError> {
         field_dictionary::HTTP_RESPONSE_STATUS_CODE,
         SiemField::U32(status_code),
     );
-    log.set_product(Cow::Borrowed("ModSecurity"));
+    log.set_product(Cow::Borrowed("Apache2"));
     log.set_service(Cow::Borrowed("ModSecurity"));
     log.set_vendor(Cow::Borrowed("ModSecurity"));
     log.set_category(Cow::Borrowed("WAF"));
