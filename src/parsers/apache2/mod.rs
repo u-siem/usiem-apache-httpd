@@ -42,6 +42,11 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
         },
         None => return Err(LogParsingError::NoValidParser(log)),
     };
+    let (http_protocol, http_version) = match version.find('/') {
+        Some(p) => 
+            (parse_http_protocol(&version[..p]), &version[(p+1)..]),
+        None => (parse_http_protocol(version), ""),
+    };
     let http_code = match fields.get(1) {
         Some(v) => match v.parse::<u32>() {
             Ok(v) => v,
@@ -103,6 +108,10 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
     }else{
         (None,None)
     };
+    let http_version = match http_version {
+        "" => None,
+        _ => Some(SiemField::from_str(http_version.to_string()))
+    };
 
     let mut log = SiemLog::new(
         log_line.to_string(),
@@ -132,7 +141,7 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
         url_path: Cow::Owned(url_path.to_string()),
         url_query: Cow::Owned(url_query.to_string()),
         url_extension: Cow::Owned(url_extension.to_string()),
-        protocol: parse_http_protocol(version),
+        protocol: http_protocol,
         user_name,
         mime_type: Cow::Borrowed(""),
         outcome
@@ -140,6 +149,10 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
     log.set_event_created(event_created);
     log.add_field("source.host_name", SiemField::from_str(source_host));
 
+    match http_version {
+        Some(v) => {log.add_field("http.version", v);},
+        None => {}
+    };
     match destination_host {
         Some(v) => {
             log.add_field("destination.host_name", SiemField::from_str(v));
@@ -281,10 +294,12 @@ mod filterlog_tests {
                 assert_eq!(log.service(), "Web Server");
                 assert_eq!(log.field(field_dictionary::HTTP_REQUEST_METHOD), Some(&SiemField::from_str("GET")));
                 assert_eq!(log.field(field_dictionary::HTTP_RESPONSE_STATUS_CODE), Some(&SiemField::U32(304)));
-                assert_eq!(log.field(field_dictionary::SOURCE_BYTES), Some(&SiemField::U32(465)));
-                assert_eq!(log.field(field_dictionary::DESTINATION_BYTES), Some(&SiemField::U32(164)));
+                assert_eq!(log.field(field_dictionary::SOURCE_BYTES), Some(&SiemField::U32(164)));
+                assert_eq!(log.field(field_dictionary::DESTINATION_BYTES), Some(&SiemField::U32(465)));
                 assert_eq!(log.field("user_agent.original"), Some(&SiemField::from_str("Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) Gecko/20100101 Firefox/85.0")));
                 assert_eq!(log.field(field_dictionary::SOURCE_IP), Some(&SiemField::IP(SiemIp::from_ip_str("172.17.0.1").unwrap())));
+                assert_eq!(log.field(field_dictionary::SOURCE_IP), Some(&SiemField::IP(SiemIp::from_ip_str("172.17.0.1").unwrap())));
+                assert_eq!(log.field("http.version"), Some(&SiemField::from_str("1.1")));
             }
             Err(_) => assert_eq!(1, 0),
         }

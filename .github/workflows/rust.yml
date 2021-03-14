@@ -11,8 +11,12 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    services:
+      squid:
+        image: secsamdev/usiem-apache2
+        ports:
+          - 8080:80
 
     steps:
     - uses: actions/checkout@v2
