@@ -54,6 +54,7 @@ pub struct ModSecurityAction<'input> {
 }
 #[derive(Serialize, Deserialize)]
 pub struct ModSecurityAudit<'input> {
+    #[serde(borrow)]
     pub action : ModSecurityAction<'input>,
     #[serde(borrow)]
     pub messages: Vec<Cow<'input, str>>
