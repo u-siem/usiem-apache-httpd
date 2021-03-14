@@ -55,11 +55,23 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
         None => return Err(LogParsingError::NoValidParser(log)),
     };
     let referer = match fields.get(3) {
-        Some(v) => v,
+        Some(v) => {
+            if *v == "-" {
+                ""
+            }else{
+                v
+            }
+        },
         None => return Err(LogParsingError::NoValidParser(log)),
     };
     let user_agent = match fields.get(4) {
-        Some(v) => v,
+        Some(v) => {
+            if *v == "-" {
+                ""
+            }else{
+                v
+            }
+        },
         None => return Err(LogParsingError::NoValidParser(log)),
     };
     // Compatibility with combined and combinedio format
@@ -160,7 +172,7 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
         None => {}
     };
     
-    match *referer {
+    match referer {
         "" => {}
         _ => {
             log.add_field(
@@ -296,8 +308,8 @@ mod filterlog_tests {
                 assert_eq!(log.field(field_dictionary::HTTP_RESPONSE_STATUS_CODE), Some(&SiemField::U32(304)));
                 assert_eq!(log.field(field_dictionary::SOURCE_BYTES), Some(&SiemField::U32(164)));
                 assert_eq!(log.field(field_dictionary::DESTINATION_BYTES), Some(&SiemField::U32(465)));
+                assert_eq!(log.field(field_dictionary::URL_PATH), Some(&SiemField::from_str("/")));
                 assert_eq!(log.field("user_agent.original"), Some(&SiemField::from_str("Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:85.0) Gecko/20100101 Firefox/85.0")));
-                assert_eq!(log.field(field_dictionary::SOURCE_IP), Some(&SiemField::IP(SiemIp::from_ip_str("172.17.0.1").unwrap())));
                 assert_eq!(log.field(field_dictionary::SOURCE_IP), Some(&SiemField::IP(SiemIp::from_ip_str("172.17.0.1").unwrap())));
                 assert_eq!(log.field("http.version"), Some(&SiemField::from_str("1.1")));
             }

@@ -25,7 +25,7 @@ pub fn parse_log_json(mut log: SiemLog) -> Result<SiemLog, LogParsingError> {
             };
             let mod_log: ModSecurityLog = match serde_json::from_str(&log_line[start_log_pos..]) {
                 Ok(v) => v,
-                Err(_) => return Err(LogParsingError::NoValidParser(log))
+                Err(_) => return Err(LogParsingError::NoValidParser(log)),
             };
             mod_log
         }
@@ -89,25 +89,50 @@ pub fn parse_log_json(mut log: SiemLog) -> Result<SiemLog, LogParsingError> {
     let url_full = SiemField::from_str(url_full.to_string());
     let status_code = mod_log.response.status;
     let rule_description = SiemField::from_str(mod_log.audit_data.action.message.to_string());
-    let rule_name = mod_log
-        .audit_data
-        .messages
-        .get(0)
-        .map(|v| extract_rule_content(v))
-        .unwrap_or(String::from("Unknown Rule"));
-    let rule_id = mod_log
-        .audit_data
-        .messages
-        .get(0)
-        .map(|v| extract_id(v).unwrap_or(0))
-        .unwrap_or(0);
-    let category = mod_log
-        .audit_data
-        .messages
-        .get(0)
-        .map(|v| extract_intrusion_category(v))
-        .unwrap_or(IntrusionCategory::UNKNOWN);
 
+    let rule_name = {
+        if mod_log.audit_data.messages.len() > 3 {
+            mod_log
+                .audit_data
+                .messages
+                .get(1)
+                .map(|v| extract_rule_content(v))
+                .unwrap_or(String::from("Unknown Rule"))
+        } else {
+            mod_log
+                .audit_data
+                .messages
+                .get(0)
+                .map(|v| extract_rule_content(v))
+                .unwrap_or(String::from("Unknown Rule"))
+        }
+    };
+    let rule_id = {
+        if mod_log.audit_data.messages.len() > 3 {
+            mod_log
+                .audit_data
+                .messages
+                .get(1)
+                .map(|v| extract_id(v).unwrap_or(0))
+                .unwrap_or(0)
+        } else {
+            mod_log
+                .audit_data
+                .messages
+                .get(0)
+                .map(|v| extract_id(v).unwrap_or(0))
+                .unwrap_or(0)
+        }
+    };
+    let category = mod_log.audit_data.messages;
+    let category = {
+        let mut cat = IntrusionCategory::UNKNOWN;
+        for msg in category {
+            let tg = extract_tags(&msg);
+            cat = map_attack(tg, cat);
+        }
+        cat
+    };
     let event = SiemEvent::Intrusion(IntrusionEvent {
         destination_ip,
         source_ip,
@@ -150,58 +175,59 @@ fn extract_rule_content(msg: &str) -> String {
         Some(v) => v,
         None => return String::new(),
     };
-    let msg = &msg[msg_pos + 6..msg_pos +end_pos];
+    let msg = &msg[msg_pos + 6..msg_pos + end_pos];
     return msg.to_string();
 }
 
-fn extract_intrusion_category(msg: &str) -> IntrusionCategory {
-    let tags = extract_tags(msg);
-    if tags.contains("attack-sqli") {
-        return IntrusionCategory::SQL_INJECTION;
+fn map_attack(tags: BTreeSet<&str>, last_cat: IntrusionCategory) -> IntrusionCategory {
+    let mut cat = IntrusionCategory::UNKNOWN;
+    if last_cat == IntrusionCategory::SQL_INJECTION || tags.contains("attack-sqli") {
+        cat = IntrusionCategory::SQL_INJECTION;
     }
-    if tags.contains("attack-dos") {
-        return IntrusionCategory::DOS;
+    if last_cat == IntrusionCategory::DOS || tags.contains("attack-dos") {
+        cat = IntrusionCategory::DOS;
     }
-    if tags.contains("attack-xss") {
-        return IntrusionCategory::XSS;
+    if last_cat == IntrusionCategory::XSS || tags.contains("attack-xss") {
+        cat = IntrusionCategory::XSS;
     }
-    if tags.contains("attack-injection-php") {
-        return IntrusionCategory::REMOTE_EXPLOIT;
+    if last_cat == IntrusionCategory::REMOTE_EXPLOIT || tags.contains("attack-injection-php") {
+        cat = IntrusionCategory::REMOTE_EXPLOIT;
     }
-    if tags.contains("attack-lfi") {
-        return IntrusionCategory::LOCAL_EXPLOIT;
+    if last_cat == IntrusionCategory::LOCAL_EXPLOIT || tags.contains("attack-lfi") {
+        cat = IntrusionCategory::LOCAL_EXPLOIT;
     }
     if tags.contains("attack-rfi") {
-        return IntrusionCategory::REMOTE_EXPLOIT;
+        cat = IntrusionCategory::REMOTE_EXPLOIT;
     }
     if tags.contains("attack-rce") {
-        return IntrusionCategory::REMOTE_EXPLOIT;
+        cat = IntrusionCategory::REMOTE_EXPLOIT;
     }
-    if tags.contains("attack-fixation") {
-        return IntrusionCategory::SESSION_FIXATION;
+    if last_cat == IntrusionCategory::SESSION_FIXATION || tags.contains("attack-fixation") {
+        cat = IntrusionCategory::SESSION_FIXATION;
     }
-    if tags.contains("attack-reputation-ip") {
-        return IntrusionCategory::REPUTATION;
+    if last_cat == IntrusionCategory::REPUTATION || tags.contains("attack-reputation-ip") {
+        cat = IntrusionCategory::REPUTATION;
     }
-    if tags.contains("attack-disclosure") {
-        return IntrusionCategory::INFORMATION_LEAKAGE;
+    if last_cat == IntrusionCategory::INFORMATION_LEAKAGE || tags.contains("attack-disclosure") {
+        cat = IntrusionCategory::INFORMATION_LEAKAGE;
     }
-    if tags.contains("attack-reputation-scanner")
+    if last_cat == IntrusionCategory::SURVEILLANCE
+        || tags.contains("attack-reputation-scanner")
         || tags.contains("attack-reputation-crawler")
         || tags.contains("attack-reputation-scripting")
     {
-        return IntrusionCategory::SURVEILLANCE;
+        cat = IntrusionCategory::SURVEILLANCE;
     }
     if tags.contains("anomaly-evaluation") {
-        return IntrusionCategory::ANOMALY;
+        cat = IntrusionCategory::ANOMALY;
     }
     if tags.contains("attack-protocol") {
-        return IntrusionCategory::PROTOCOL_ATTACK;
+        cat = IntrusionCategory::PROTOCOL_ATTACK;
     }
     if tags.contains("anomaly-generic") {
-        return IntrusionCategory::WEB_ATTACK;
+        cat = IntrusionCategory::WEB_ATTACK;
     }
-    return IntrusionCategory::UNKNOWN;
+    return cat;
 }
 
 fn extract_id(msg: &str) -> Option<u32> {
@@ -221,7 +247,7 @@ fn extract_tags<'a>(msg: &'a str) -> BTreeSet<&'a str> {
         match msg[last_pos..].find("[tag \"") {
             Some(v) => match msg[last_pos + v..].find("\"]") {
                 Some(v2) => {
-                    let tag = &msg[(last_pos + v + 6)..last_pos+v + v2];
+                    let tag = &msg[(last_pos + v + 6)..last_pos + v + v2];
                     tags.insert(tag);
                     last_pos += v + v2;
                 }
@@ -229,7 +255,9 @@ fn extract_tags<'a>(msg: &'a str) -> BTreeSet<&'a str> {
                     break;
                 }
             },
-            None => break,
+            None => {
+                break;
+            }
         }
     }
     return tags;
@@ -240,8 +268,8 @@ mod filterlog_tests {
     use super::parse_log_json;
     use usiem::events::field::{SiemField, SiemIp};
     use usiem::events::field_dictionary;
-    use usiem::events::SiemLog;
     use usiem::events::intrusion::IntrusionCategory;
+    use usiem::events::SiemLog;
 
     #[test]
     fn test_parse_log_json() {
@@ -262,7 +290,9 @@ mod filterlog_tests {
                 );
                 assert_eq!(
                     log.field(field_dictionary::RULE_CATEGORY),
-                    Some(&SiemField::from_str(IntrusionCategory::SQL_INJECTION.to_string()))
+                    Some(&SiemField::from_str(
+                        IntrusionCategory::SQL_INJECTION.to_string()
+                    ))
                 );
                 assert_eq!(
                     log.field(field_dictionary::DESTINATION_PORT),
@@ -278,7 +308,9 @@ mod filterlog_tests {
                 );
                 assert_eq!(
                     log.field(field_dictionary::RULE_NAME),
-                    Some(&SiemField::from_str("SQL Injection Attack Detected via libinjection"))
+                    Some(&SiemField::from_str(
+                        "SQL Injection Attack Detected via libinjection"
+                    ))
                 );
                 assert_eq!(
                     log.field(field_dictionary::SOURCE_IP),

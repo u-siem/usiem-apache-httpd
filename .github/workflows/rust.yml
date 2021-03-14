@@ -23,5 +23,5 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: CI_CD=1 cargo test --verbose
       timeout-minutes: 5
