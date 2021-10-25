@@ -1,6 +1,6 @@
 [package]
 name = "u-siem-apache2"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Samuel Garcés <samuel.garces@protonmail.com>"]
 license = "MIT"
 description = "Library to be used to build a custom SIEM with the framework uSIEM"
@@ -21,3 +21,4 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 u-siem = {version = "0.0"}
 chrono = "0.4"
+lazy_static = "1.4.0"

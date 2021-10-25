@@ -159,7 +159,7 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
         outcome
     }));
     log.set_event_created(event_created);
-    log.add_field("source.host_name", SiemField::from_str(source_host));
+    log.add_field("source.hostname", SiemField::from_str(source_host));
 
     match http_version {
         Some(v) => {log.add_field("http.version", v);},
@@ -167,7 +167,7 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
     };
     match destination_host {
         Some(v) => {
-            log.add_field("destination.host_name", SiemField::from_str(v));
+            log.add_field("destination.hostname", SiemField::from_str(v));
         },
         None => {}
     };
@@ -186,6 +186,7 @@ pub fn parse_log_combinedio(log: SiemLog) -> Result<SiemLog, LogParsingError> {
 pub fn parse_http_method(method: &str) -> HttpMethod {
     match method {
         "GET" => HttpMethod::GET,
+        "HEAD" => HttpMethod::HEAD,
         "POST" => HttpMethod::POST,
         "PUT" => HttpMethod::PUT,
         "PATCH" => HttpMethod::PATCH,
